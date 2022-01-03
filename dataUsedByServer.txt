@@ -1,0 +1,19 @@
+-- data sent by server to client --
+
+
+-- on new client connect --
+2. serverDetails to all clients
+
+-- on client disconnect -- 
+serverDetials to all clients
+
+-- on client receive data --
+same data sent to all clients
+
+
+
+-- data sent by client to server --
+
+1. clientData
+
+game data

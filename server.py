@@ -5,11 +5,29 @@ import threading
 import sys
 import time
 
+import os
+
+os.chdir(sys.path[0])
+sys.path.insert(1, "P://Python Projects/assets/")
+
+from General import *
+
+
 class Server:
-	def __init__(self, host="127.0.0.1", port=65432, name=""):
+	def __init__(self, host="127.0.0.1", port=65432, maxNumConnectedClients=100, name=""):
 		self.host = host
 		self.port = port
 		self.name = name
+
+		self.logFolder = "logs/"	
+
+		self.threadCount = 0
+		self.clientsConnected = []
+
+		self.clientID = 0
+		self.maxNumConnectedClients = maxNumConnectedClients
+
+		CreateFile(f"log - {NowFormatted('%d-%m-%Y-%H-%M-%S-%f')}.txt", self.logFolder)
 
 	def Open(self):
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -20,8 +38,23 @@ class Server:
 		self.sock.listen()
 
 	def Accept(self):
-		self.connection, self.address = self.sock.accept()
-		return self.connection, self.address
+		while len(self.clientsConnected) < self.maxNumConnectedClients:
+			# accept new clients
+			connection, address = self.sock.accept()
+
+			self.Log(f"Client {address[0]}:{address[1]} connected at date {NowFormatted('%d/%m/%Y')} at time {NowFormatted('%H:%M:%S:%f')}")
+
+			self.clientID += 1
+			name = connection.recv(1024).decode()
+			self.clientsConnected.append(Client(connection, address, self, name))
+			self.clientsConnected[-1].connection.send(f"serverName-{self.name}-".encode())
+			
+			# create new thread
+			threading._start_new_thread(self.clientsConnected[-1].Receive, ())
+			self.threadCount = len(self.clientsConnected)
+			print(f"Thread number: {self.threadCount}")
+
+			self.UpdateActiveUsers()
 
 	def Receive(self, waitTime=None, msgMax=None):
 		self.startTime = dt.datetime.now()
@@ -49,6 +82,11 @@ class Server:
 				if data == f"Close-Auth-Code-{self.closeCode}":
 					print("Closed")
 					break
+
+	def Log(self, message):
+		print(message)
+
+
 
 
 class Client:
@@ -106,45 +144,27 @@ class Client:
 		pass
 
 
-class MultiServer(Server):
-	def __init__(self, host="127.0.0.1", port=65432, maxClientNum=100, name=""):
-		super().__init__(host, port, name)
-
-		self.threadCount = 0
-		self.clients = []
-		self.maxID = 0
-		self.maxClientNum = maxClientNum
-
-	def Accept(self):
-		while len(self.clients) < self.maxClientNum:
-			# accept new clients
-			connection, address = self.sock.accept()
-			print(f"Connected to {address[0]}:{address[1]}")
-			name = connection.recv(1024).decode()
-
-			print(name)
-			# create new client
-			self.clients.append(Client(connection, address, self.maxID, self, name))
-			self.clients[-1].connection.sendall(str(self.clients[-1].ID).encode())
-			self.maxID += 1
-			self.clients[-1].connection.send(f"serverName-{self.name}-".encode())
-
-			# create new thread
-			threading._start_new_thread(self.clients[-1].Receive, ())
-			self.threadCount = len(self.clients)
-			print(f"Thread number: {self.threadCount}")
-
-			self.UpdateActiveUsers()
+class ChatServer(Server):
+	def __init__(self, host="127.0.0.1", port=65432, maxNumConnectedClients=100, name=""):
+		super().__init__(host, port, maxNumConnectedClients, name)
 
 	def UpdateActiveUsers(self):
 		names = ""
-		for client in self.clients:
+		for client in self.clientsConnected:
 			names += f"▷ {client.name}\n"
-		for client in self.clients:
+		for client in self.clientsConnected:
 			client.connection.send(f"SERVER-ActiveUsers-{names}".encode())
 
 
-s = MultiServer(host="103.47.59.130", port=5001, name="Chatroom 1")
+# s = ChatServer(host="192.168.0.2", port=5001, name="Chatroom 1")
+# s.Open()
+# s.Listen()
+# s.Accept()
+
+
+
+s = Server(name="Server")
 s.Open()
 s.Listen()
 s.Accept()
+
