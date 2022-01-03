@@ -14,32 +14,10 @@ from General import *
 
 
 def ConvertStringToDict(dictString):
-	dictString = dictString.strip("{}")
-
-	returnDict = {}
-
-
-	for txt in dictString.split(","):
-		key, value = txt.split(":")
-
-		key = key.strip(" '")
-		value = value.strip(" '")
-
-		try:
-			returnDict[key] = int(value)
-		except:
-			if value == "true" or value == "false":
-				returnDict[key] = bool(value)
-			else:
-				returnDict[key] = value
-
-
-	return returnDict
-
+	return eval(dictString)
 
 
 class Server:
-
 	def __init__(self, serverIP="127.0.0.1", port=65432, maxNumOfClients=4, serverDetails={}):
 		self.IP = serverIP
 		self.port = port
@@ -52,7 +30,6 @@ class Server:
 		self.UpdateServerDetails()
 
 		self.threadCount = 0
-
 
 	def Open(self):
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -75,7 +52,8 @@ class Server:
 			client = ConvertStringToDict(connection.recv(1024).decode())
 			self.clientsConnected.append(Client(connection, address, self, client["name"], self.nextID, client))
 			self.UpdateServerDetails()
-			connection.send(str(self.serverDetails).encode())
+			for client in self.clientsConnected:
+				client.connection.send(str({"serverDetails": self.serverDetails, "ID": client.ID}).encode())
 			self.nextID += 1
 			_, _, diff = t.Stop()
 			print(f"Client {address[0]}:{address[1]} connected at - {NowFormatted()} - in {diff}.")
@@ -86,7 +64,10 @@ class Server:
 			print(f"New thread created for client: {self.clientsConnected[-1].ID}. Thread count: {self.threadCount}, number of clients: {len(self.clientsConnected)}")
 	
 	def UpdateServerDetails(self):
-		self.serverDetails["activeUsers"] = self.clientsConnected
+		activeUsers = []
+		for client in self.clientsConnected:
+			activeUsers.append(client.name)
+		self.serverDetails["activeUsers"] = activeUsers
 		self.serverDetails["IP"] = self.IP
 		self.serverDetails["port"] = self.port
 
@@ -108,8 +89,9 @@ class Server:
 			self.clientsConnected.remove(client)
 
 		self.UpdateServerDetails()
-		self.UpdateClients(str(self.serverDetails))
-
+		for client in self.clientsConnected:
+			client.connection.send(str({"serverDetails": self.serverDetails, "ID": client.ID}).encode())
+			
 		self.threadCount -= 1
 
 		print(f"Client: {client.ID} disconnected at - {NowFormatted()}.")
@@ -127,25 +109,28 @@ class Client:
 
 	def Receive(self):
 		while True:
-			txt = self.connection.recv(1024).decode()
+			try:
+				txt = self.connection.recv(1024).decode()
 
-			if not txt:
+				if not txt:
+					break
+
+				data = ConvertStringToDict(txt)
+
+				print(f"Client sent data: {data}")
+
+				if data.get("close", False):
+					break
+
+				self.server.UpdateClients(data)
+			except ConnectionResetError:
+				print(f"Client: {self.ID} was forcibly removed by host.")
 				break
-
-			data = ConvertStringToDict(txt)
-
-			print(f"Client sent data: {data}")
-
-			if data.get("close", False):
-				break
-
-			self.server.UpdateClients(data)
 
 		self.Close()
 
 	def Close(self):
 		self.server.Remove(self)
-
 		self.connection.close()
 		sys.exit(0)
 
