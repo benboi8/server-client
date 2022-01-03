@@ -49,3 +49,12 @@ class Client:
 		self.Send(input(""))
 		time.sleep(0.1)
 		self.Receive()
+
+
+if __name__ == "__main__":
+	c = Client()
+	c.Open()
+	c.Connect()
+
+	while True:
+		c.SR()
